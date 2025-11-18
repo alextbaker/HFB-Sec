@@ -6,21 +6,26 @@ from datetime import datetime
 
 st.set_page_config(page_title="HFB Cyber Guard", page_icon="🔒", layout="centered")
 
-# === PUT YOUR FREE WPSCAN KEY HERE (from wpscan.com) ===
-WPSCAN_KEY = st.secrets.get("wpscan_key", "PUT_YOUR_KEY_HERE")  # or just paste it directly below
+# Your free WPScan key (from secrets or paste directly)
+WPSCAN_KEY = st.secrets["wpscan_key"] if "wpscan_key" in st.secrets else "ADD_YOUR_KEY_HERE"
 
-# HFB Branding
+# Branding
 st.image("https://hfbtechnologies.com/wp-content/uploads/2023/06/HFB-Logo.png", width=220)
 st.markdown("<h1 style='color:#002855;text-align:center;'>HFB Technologies</h1>", unsafe_allow_html=True)
 st.markdown("<h3 style='color:#00aeef;text-align:center;'>Cyber Guard Pro</h3>", unsafe_allow_html=True)
 st.markdown("---")
 
-# === REAL SCANS ===
+if WPSCAN_KEY == "ADD_YOUR_KEY_HERE":
+    st.error("⚠️ Add your free WPScan API key in Secrets (Manage app → Settings → Secrets) for real vulnerability scans!")
+
+# Scans
 def get_wpscan(url):
+    if not WPSCAN_KEY or WPSCAN_KEY == "ADD_YOUR_KEY_HERE":
+        return "Add key", 0
     try:
-        clean = url.replace("https://", "").replace("http://", "").split("/")[0]
+        clean = url.replace("https://", "").replace("http://", "").rstrip("/")
         headers = {"Authorization": f"Token token={WPSCAN_KEY}"}
-        r = requests.get(f"https://wpscan.com/api/v3/wordpresses?url={clean}", headers=headers, timeout=25)
+        r = requests.get(f"https://wpscan.com/api/v3/wordpresses?url={clean}", headers=headers, timeout=30)
         data = r.json()
         if 'wordpress' in data:
             vulns = len(data['wordpress'].get('vulnerabilities', []))
@@ -32,72 +37,61 @@ def get_wpscan(url):
 
 def get_headers_grade(url):
     try:
-        r = requests.get(f"https://securityheaders.com/?q={url}&followRedirects=on", timeout=25)
-        match = re.search(r'<span class="grade">([A-F])[\+\-]?', r.text)
-        return match.group(1) if match else "F"
+        r = requests.get(f"https://securityheaders.com/?q={url}&followRedirects=on", timeout=30)
+        match = re.search(r'grade-[A-F]', r.text)
+        if match:
+            return match.group(0)[-1]
+        return "F"
     except:
         return "Error"
 
 def get_sucuri(url):
     try:
-        r = requests.get(f"https://sitecheck.sucuri.net/results/{url}", timeout=25)
-        if any(x in r.text.lower() for x in ["malware", "blacklist", "spam", "suspicious"]):
+        r = requests.get(f"https://sitecheck.sucuri.net/results/{url}", timeout=30)
+        text = r.text.lower()
+        if any(word in text for word in ["malware", "blacklist", "suspicious", "spam"]):
             return "INFECTED / BLACKLISTED"
-        return "Clean"
+        if "no issues detected" in text or "clean" in text:
+            return "Clean"
+        return "Unknown"
     except:
         return "Error"
 
 def make_pdf(url, ver, vulns, grade, sucuri):
     text = f"""
-HFB Technologies – Website Security Report
-══════════════════════════════════════════════════════════
+HFB Technologies Security Report
 Site: {url}
 Date: {datetime.now().strftime('%B %d, %Y')}
 
-SECURITY SUMMARY
-──────────────────────────────────────────────────────────
-WordPress Version:               {ver}
-Known Vulnerabilities:           {vulns} active exploits
-Security Headers Grade:          {grade} (F = critical missing protections)
-Malware / Blacklist Status:      {sucuri}
+Vulnerabilities: {vulns}
+Headers Grade: {grade}
+Malware: {sucuri}
 
-RECOMMENDED ACTION
-──────────────────────────────────────────────────────────
-One-Time Full Fix + Clean Report:        $3,500
-Monthly Unlimited Protection:            $299/mo or $249/mo (annual)
+One-Time Fix: $3,500
+Monthly Protection: $299/mo ($249 annual)
 
-Contact HFB Technologies today – avoid hacks, Stripe freezes, and insurance denials.
-
-══════════════════════════════════════════════════════════
-HFB Technologies | Keeping Your Business Safe Online
+Contact HFB Technologies
     """.strip()
     return text.encode('utf-8')
 
-# UI
-st.markdown("### Instant client security scan")
-url = st.text_input("Website URL", placeholder="https://client.com")
+st.markdown("### Scan client site")
+url = st.text_input("URL", placeholder="https://example.com")
 
-if st.button("🚀 Scan Now", type="primary") and url:
+if st.button("Scan Now", type="primary") and url:
     if not url.startswith("http"):
         url = "https://" + url
 
-    with st.spinner("Running real scans..."):
+    with st.spinner("Scanning..."):
         time.sleep(2)
         ver, vulns = get_wpscan(url)
         grade = get_headers_grade(url)
         sucuri = get_sucuri(url)
 
-    st.success("Scan complete!")
-
+    st.success("Done!")
     c1, c2, c3 = st.columns(3)
-    c1.metric("Vulnerabilities", vulns, delta=vulns if vulns > 0 else None)
+    c1.metric("Vulnerabilities", vulns)
     c2.metric("Headers Grade", grade)
     c3.metric("Malware", sucuri)
 
     pdf = make_pdf(url, ver, vulns, grade, sucuri)
-    st.download_button(
-        "📥 Download HFB Security Report",
-        data=pdf,
-        file_name=f"HFB_Security_Report_{url.split('//')[1].split('/')[0]}.pdf",
-        mime="application/pdf"
-    )
+    st.download_button("Download Report", pdf, f"HFB_Report_{url.split('//')[1].split('/')[0]}.pdf", "application/pdf")
