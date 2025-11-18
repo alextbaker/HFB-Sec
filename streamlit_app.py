@@ -1,4 +1,4 @@
-# streamlit_app.py  ← paste this exact code
+# streamlit_app.py  ← deploy this
 import streamlit as st
 import requests
 import re
@@ -8,37 +8,24 @@ import io
 
 st.set_page_config(page_title="HFB Cyber Guard", page_icon="🔒", layout="centered")
 
+# ================= YOUR FREE UNLIMITED WPSCAN KEY =================
+WPSCAN_API_KEY = "HrvGdNeeEuj9zhWqLIykNxscP7SaoPvu3YDEyySts5E"   # ← paste your key from wpscan.com here
+
 # HFB Branding
 st.image("https://hfbtechnologies.com/wp-content/uploads/2023/06/HFB-Logo.png", width=200)
 st.markdown("<h1 style='color:#002855;text-align:center;'>HFB Technologies</h1>", unsafe_allow_html=True)
 st.markdown("<h3 style='color:#00aeef;text-align:center;'>Cyber Guard Pro</h3>", unsafe_allow_html=True)
 st.markdown("---")
 
-# FIXED header grade parsing (now works
-def get_headers_grade(url):
-    try:
-        r = requests.get(f"https://securityheaders.com/?q={url}&followRedirects=on", timeout=20)
-        # The grade is in a <span class="grade">F</span> or similar
-        match = re.search(r'<span class="grade">(.*?)</span>', r.text, re.IGNORECASE)
-        if match:
-            return match.group(1).strip().upper()
-        # Fallback: look for the score
-        if "score_value" in r.text:
-            score_match = re.search(r'score_value.*?(\d+)', r.text)
-            score = int(score_match.group(1)) if score_match else 0
-            if score >= 90: return "A"
-            elif score >= 80: return "B"
-            elif score >= 70: return "C"
-            elif score >= 60: return "D"
-            else: return "F"
-        return "F"
-    except:
-        return "Error"
-
+# ================= UNLIMITED WPSCAN (real vulnerabilities) =================
 def get_wpscan_data(url):
+    if not WPSCAN_API_KEY or WPSCAN_API_KEY == "PUT_YOUR_KEY_HERE":
+        st.error("Add your free WPScan API key to the script (line 12) for unlimited scans")
+        return "Add key", 0
     try:
         clean_url = url.replace("https://", "").replace("http://", "").split("/")[0]
-        r = requests.get(f"https://wpscan.com/api/v3/wordpresses?url={clean_url}", timeout=20)
+        headers = {"Authorization": f"Token token={WPSCAN_API_KEY}"}
+        r = requests.get(f"https://wpscan.com/api/v3/wordpresses?url={clean_url}", headers=headers, timeout=20)
         data = r.json()
         if 'wordpress' in data:
             wp = data['wordpress']
@@ -46,8 +33,19 @@ def get_wpscan_data(url):
             vulns = len(wp.get('vulnerabilities', []))
             return version, vulns
         return "Not WordPress", 0
-    except:
+    except Exception as e:
         return "Error", 0
+
+# Accurate headers grade
+def get_headers_grade(url):
+    try:
+        r = requests.get(f"https://securityheaders.com/?q={url}&followRedirects=on", timeout=20)
+        match = re.search(r'<span class="grade">(.*?)</span>', r.text, re.IGNORECASE)
+        if match:
+            return match.group(1).strip().upper()
+        return "F"
+    except:
+        return "Error"
 
 def get_sucuri_status(url):
     try:
@@ -58,6 +56,7 @@ def get_sucuri_status(url):
     except:
         return "Error"
 
+# PDF report
 def make_pdf(url, wp_ver, vulns, grade, sucuri):
     report = f"""
 HFB Technologies – Website Security Report
@@ -85,14 +84,14 @@ HFB Technologies | Keeping Your Business Safe Online
     return report.encode('latin-1', errors='ignore')
 
 # UI
-st.markdown("### Scan a client site")
-url = st.text_input("Website URL", placeholder="https://example.com")
+st.markdown("### Instant client security scans")
+url = st.text_input("Website URL", placeholder="https://client.com")
 
 if st.button("🚀 Scan Now", type="primary") and url:
     if not url.startswith("http"):
         url = "https://" + url
 
-    with st.spinner("Running real scans (WPScan, SecurityHeaders, Sucuri)..."):
+    with st.spinner("Running unlimited WPScan + SecurityHeaders + Sucuri..."):
         time.sleep(2)
         wp_ver, vulns = get_wpscan_data(url)
         grade = get_headers_grade(url)
