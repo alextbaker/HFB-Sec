@@ -1,7 +1,6 @@
 
 ### Updated Script (adds full vulnerability list + fixes in the PDF)
 
-Replace your `streamlit_app.py` with this (still only needs `requests` and your key in Secrets):
 
 ```python
 import streamlit as st
