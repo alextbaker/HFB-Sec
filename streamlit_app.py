@@ -2,7 +2,6 @@
 ### Updated Script (adds full vulnerability list + fixes in the PDF)
 
 
-```python
 import streamlit as st
 import requests
 import time
