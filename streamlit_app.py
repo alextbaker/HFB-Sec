@@ -1,6 +1,7 @@
-# streamlit_app.py  ← paste this exactly
+# streamlit_app.py  ← paste this exact code
 import streamlit as st
 import requests
+import re
 import time
 from datetime import datetime
 import io
@@ -10,14 +11,34 @@ st.set_page_config(page_title="HFB Cyber Guard", page_icon="🔒", layout="cente
 # HFB Branding
 st.image("https://hfbtechnologies.com/wp-content/uploads/2023/06/HFB-Logo.png", width=200)
 st.markdown("<h1 style='color:#002855;text-align:center;'>HFB Technologies</h1>", unsafe_allow_html=True)
-st.markdown("<h3 style='color:#00aeef;text-align:center;'>Cyber Guard Pro – Security Scanner</h3>", unsafe_allow_html=True)
+st.markdown("<h3 style='color:#00aeef;text-align:center;'>Cyber Guard Pro</h3>", unsafe_allow_html=True)
 st.markdown("---")
 
-# Real scanning functions
+# FIXED header grade parsing (now works
+def get_headers_grade(url):
+    try:
+        r = requests.get(f"https://securityheaders.com/?q={url}&followRedirects=on", timeout=20)
+        # The grade is in a <span class="grade">F</span> or similar
+        match = re.search(r'<span class="grade">(.*?)</span>', r.text, re.IGNORECASE)
+        if match:
+            return match.group(1).strip().upper()
+        # Fallback: look for the score
+        if "score_value" in r.text:
+            score_match = re.search(r'score_value.*?(\d+)', r.text)
+            score = int(score_match.group(1)) if score_match else 0
+            if score >= 90: return "A"
+            elif score >= 80: return "B"
+            elif score >= 70: return "C"
+            elif score >= 60: return "D"
+            else: return "F"
+        return "F"
+    except:
+        return "Error"
+
 def get_wpscan_data(url):
     try:
-        api = f"https://wpscan.com/api/v3/wordpresses?url={url.lstrip('https://').lstrip('http://')}"
-        r = requests.get(api, timeout=15)
+        clean_url = url.replace("https://", "").replace("http://", "").split("/")[0]
+        r = requests.get(f"https://wpscan.com/api/v3/wordpresses?url={clean_url}", timeout=20)
         data = r.json()
         if 'wordpress' in data:
             wp = data['wordpress']
@@ -28,28 +49,15 @@ def get_wpscan_data(url):
     except:
         return "Error", 0
 
-def get_headers_grade(url):
-    try:
-        r = requests.get(f"https://securityheaders.com/?q={url}&followRedirects=on", timeout=15)
-        text = r.text
-        if "A+" in text or "A-" in text: return "A"
-        if "B" in text: return "B"
-        if "C" in text: return "C"
-        if "D" in text: return "D"
-        return "F"
-    except:
-        return "Error"
-
 def get_sucuri_status(url):
     try:
-        r = requests.get(f"https://sitecheck.sucuri.net/results/{url}", timeout=15)
+        r = requests.get(f"https://sitecheck.sucuri.net/results/{url}", timeout=20)
         if "malware" in r.text.lower() or "blacklisted" in r.text.lower():
             return "INFECTED OR BLACKLISTED"
         return "Clean"
     except:
         return "Error"
 
-# Beautiful PDF report (text-based, always works)
 def make_pdf(url, wp_ver, vulns, grade, sucuri):
     report = f"""
 HFB Technologies – Website Security Report
@@ -68,13 +76,13 @@ RECOMMENDED ACTION
 One-Time Full Fix + Clean Report:        $3,500
 Monthly Unlimited Protection:            $299/mo or $249/mo (annual)
 
-Contact HFB Technologies to secure your site and stay compliant
-with Stripe, PCI DSS, and insurance requirements.
+Contact HFB Technologies today – most clients save thousands on insurance
+and avoid Stripe payment freezes.
 
 ══════════════════════════════════════════════════════════
 HFB Technologies | Keeping Your Business Safe Online
     """.strip()
-    return report.encode('utf-8')
+    return report.encode('latin-1', errors='ignore')
 
 # UI
 st.markdown("### Scan a client site")
@@ -84,8 +92,8 @@ if st.button("🚀 Scan Now", type="primary") and url:
     if not url.startswith("http"):
         url = "https://" + url
 
-    with st.spinner("Scanning with WPScan, SecurityHeaders, Sucuri..."):
-        time.sleep(2)  # Respect APIs
+    with st.spinner("Running real scans (WPScan, SecurityHeaders, Sucuri)..."):
+        time.sleep(2)
         wp_ver, vulns = get_wpscan_data(url)
         grade = get_headers_grade(url)
         sucuri = get_sucuri_status(url)
